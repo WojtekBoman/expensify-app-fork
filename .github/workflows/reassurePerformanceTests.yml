@@ -114,7 +114,7 @@ jobs:
 
       - name: Render perf-indicator comment
         continue-on-error: true
-        run: bun scripts/perfIndicator/cli.ts --out ./.reassure/perf-comment.md
+        run: npx bun scripts/perfIndicator/cli.ts --out ./.reassure/perf-comment.md
 
       - name: Write PR number for the posting workflow
         continue-on-error: true
@@ -130,3 +130,4 @@ jobs:
             ./.reassure/perf-comment.md
             ./.reassure/pr-number.txt
           include-hidden-files: true
+          if-no-files-found: error

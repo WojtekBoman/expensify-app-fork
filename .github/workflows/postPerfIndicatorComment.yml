@@ -46,7 +46,14 @@ jobs:
             const MARKER = '<!-- perf-indicator -->';
             const {owner, repo} = context.repo;
 
-            const prNumber = fs.readFileSync('./perf-indicator-comment/pr-number.txt', 'utf8').trim();
+            const prNumberPath = './perf-indicator-comment/pr-number.txt';
+            const bodyPath = './perf-indicator-comment/perf-comment.md';
+            if (!fs.existsSync(prNumberPath) || !fs.existsSync(bodyPath)) {
+              console.log(`Artifact is missing an expected file (${prNumberPath} or ${bodyPath}) - the measure job's render step likely failed. Nothing to post.`);
+              return;
+            }
+
+            const prNumber = fs.readFileSync(prNumberPath, 'utf8').trim();
             if (!prNumber || Number.isNaN(Number(prNumber))) {
               console.log(`No valid PR number in artifact (got "${prNumber}"), nothing to post.`);
               return;
@@ -54,7 +61,7 @@ jobs:
 
             // Treat the body as untrusted: it was rendered by a job that ran fork code. It's read as a
             // file and passed to the API as a value, never interpolated into a shell `run:` step.
-            const body = fs.readFileSync('./perf-indicator-comment/perf-comment.md', 'utf8');
+            const body = fs.readFileSync(bodyPath, 'utf8');
 
             const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number: Number(prNumber)});
             const existing = comments.find((comment) => comment.body?.includes(MARKER));
