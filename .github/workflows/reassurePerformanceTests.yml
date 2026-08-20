@@ -2,9 +2,22 @@ name: Reassure Performance Tests
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened, ready_for_review]
     branches-ignore: [staging, production]
-    paths-ignore: [docs/**, help/**, .github/**, contributingGuides/**, tests/**, '**.md', '**.sh']
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!help/**'
+      - '!contributingGuides/**'
+      - '!**.md'
+      - '!**.sh'
+      - '!.github/**'
+      - '.github/workflows/reassurePerformanceTests.yml'
+      - '.github/actions/javascript/validateReassureOutput/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   baseline-perf-tests:
@@ -66,6 +79,8 @@ jobs:
     if: ${{ github.actor != 'OSBotify' }}
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: [baseline-perf-tests, branch-perf-tests]
+    permissions:
+      contents: read
     steps:
       - name: Checkout
         uses: useblacksmith/checkout@1c9394c220d293645707b625ba9d79685f093a8f # v1
@@ -96,3 +111,22 @@ jobs:
         with:
           DURATION_DEVIATION_PERCENTAGE: 20
           COUNT_DEVIATION: 0
+
+      - name: Render perf-indicator comment
+        continue-on-error: true
+        run: bun scripts/perfIndicator/cli.ts --out ./.reassure/perf-comment.md
+
+      - name: Write PR number for the posting workflow
+        continue-on-error: true
+        run: echo "${{ github.event.pull_request.number }}" > ./.reassure/pr-number.txt
+
+      - name: Upload perf-indicator comment
+        continue-on-error: true
+        # v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: perf-indicator-comment
+          path: |
+            ./.reassure/perf-comment.md
+            ./.reassure/pr-number.txt
+          include-hidden-files: true

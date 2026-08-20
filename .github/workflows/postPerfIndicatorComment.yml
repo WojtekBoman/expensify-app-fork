@@ -1,0 +1,68 @@
+name: Post perf-indicator comment
+
+# Posts (or updates) a sticky perf-indicator comment on the pull request that triggered a
+# "Reassure Performance Tests" run. Split into its own workflow, triggered by `workflow_run`, so it
+# always gets a token with pull-requests write access - even for a pull request opened from a fork,
+# where the triggering workflow itself only has a read-only token.
+#
+# Runs no pull request code and checks out nothing. The comment body was produced by a job that ran
+# fork code, so it is treated as untrusted: length-capped already by render.ts, and never
+# interpolated into a `run:` step below.
+
+on:
+  workflow_run:
+    workflows: [Reassure Performance Tests]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.id }}
+  cancel-in-progress: true
+
+jobs:
+  postComment:
+    name: Post or update the perf-indicator comment
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Download perf-indicator comment artifact
+        # v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: perf-indicator-comment
+          path: ./perf-indicator-comment
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Post or update the sticky comment
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v7
+        with:
+          script: |
+            const fs = require('fs');
+            const MARKER = '<!-- perf-indicator -->';
+            const {owner, repo} = context.repo;
+
+            const prNumber = fs.readFileSync('./perf-indicator-comment/pr-number.txt', 'utf8').trim();
+            if (!prNumber || Number.isNaN(Number(prNumber))) {
+              console.log(`No valid PR number in artifact (got "${prNumber}"), nothing to post.`);
+              return;
+            }
+
+            // Treat the body as untrusted: it was rendered by a job that ran fork code. It's read as a
+            // file and passed to the API as a value, never interpolated into a shell `run:` step.
+            const body = fs.readFileSync('./perf-indicator-comment/perf-comment.md', 'utf8');
+
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number: Number(prNumber)});
+            const existing = comments.find((comment) => comment.body?.includes(MARKER));
+
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
+              console.log(`Updated comment ${existing.id} on PR #${prNumber}.`);
+            } else {
+              await github.rest.issues.createComment({owner, repo, issue_number: Number(prNumber), body});
+              console.log(`Created new comment on PR #${prNumber}.`);
+            }
