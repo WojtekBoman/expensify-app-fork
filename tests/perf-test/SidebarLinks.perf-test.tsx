@@ -1,3 +1,4 @@
+// POC test PR: verifies the perf-indicator comment posts and updates. No behavior change.
 import {fireEvent, screen, waitFor} from '@testing-library/react-native';
 
 import {setHasRadio} from '@libs/NetworkState';

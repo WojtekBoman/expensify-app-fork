@@ -22,7 +22,7 @@ concurrency:
 jobs:
   baseline-perf-tests:
     if: ${{ github.actor != 'OSBotify' }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest # TEST-ONLY override for personal fork (no Blacksmith app installed here)
     steps:
       - name: Checkout baseline branch
         uses: useblacksmith/checkout@1c9394c220d293645707b625ba9d79685f093a8f # v1
@@ -52,7 +52,7 @@ jobs:
 
   branch-perf-tests:
     if: ${{ github.actor != 'OSBotify' }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest # TEST-ONLY override for personal fork (no Blacksmith app installed here)
     steps:
       - name: Checkout
         uses: useblacksmith/checkout@1c9394c220d293645707b625ba9d79685f093a8f # v1
@@ -77,7 +77,7 @@ jobs:
 
   validate-perf-tests:
     if: ${{ github.actor != 'OSBotify' }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest # TEST-ONLY override for personal fork (no Blacksmith app installed here)
     needs: [baseline-perf-tests, branch-perf-tests]
     permissions:
       contents: read
@@ -114,7 +114,7 @@ jobs:
 
       - name: Render perf-indicator comment
         continue-on-error: true
-        run: bun scripts/perfIndicator/cli.ts --out ./.reassure/perf-comment.md
+        run: npx bun scripts/perfIndicator/cli.ts --out ./.reassure/perf-comment.md
 
       - name: Write PR number for the posting workflow
         continue-on-error: true
@@ -130,3 +130,4 @@ jobs:
             ./.reassure/perf-comment.md
             ./.reassure/pr-number.txt
           include-hidden-files: true
+          if-no-files-found: error
