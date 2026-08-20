@@ -88,8 +88,16 @@ function SidebarLinks({insets, optionListItems, hasReportData, priorityMode = CO
 
     const viewMode = priorityMode === CONST.PRIORITY_MODE.GSD ? CONST.OPTION_MODE.COMPACT : CONST.OPTION_MODE.DEFAULT;
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    const contentContainerStyles = useMemo(() => StyleSheet.flatten([styles.pt2, {paddingBottom: StyleUtils.getSafeAreaMargins(insets).marginBottom}]), [insets]);
+    // POC-REGRESSION: deliberate wasted work on every render, to confirm the real CI pipeline surfaces a real regression.
+    const contentContainerStyles = StyleSheet.flatten([styles.pt2, {paddingBottom: StyleUtils.getSafeAreaMargins(insets).marginBottom}]);
+    let wastedWork = 0;
+    for (let i = 0; i < 2_000_000; i++) {
+        wastedWork += Math.sqrt(i);
+    }
+    if (wastedWork < 0) {
+        // eslint-disable-next-line no-console
+        console.log(wastedWork);
+    }
 
     const shouldShowEmptyLHN = optionListItems.length === 0;
 
