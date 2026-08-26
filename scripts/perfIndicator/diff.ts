@@ -12,6 +12,14 @@ import type {AddedEntry, CompareEntry, CompareResult, MeasureEntry, RemovedEntry
 
 import type {DiffOptions, DurationRow, PerfDiff, RenderRow} from './types';
 
+/**
+ * Mirrors upstream's `COUNT_DIFF_THRESHOLD` (`compare.js:30`). `meanCount` is a mean over the configured run count, so
+ * a scenario that renders once more in 2 of 10 runs reports 3 -> 3.2. Replaying 25 branches surfaced three such rows on
+ * one branch, all with unchanged issue counts. Render count is deterministic at this threshold, not at arbitrary
+ * precision, and the comment has to use the same threshold the gate does or it invents its own false positives.
+ */
+const COUNT_DIFF_THRESHOLD = 0.5;
+
 const DEFAULT_OPTIONS: DiffOptions = {
     durationFloorMs: 5,
     durationRelativeThreshold: 0.2,
@@ -53,7 +61,7 @@ function buildRenderRow(entry: CompareEntry | AddedEntry, options: DiffOptions):
         redundantUpdates: Math.max(baseline.redundantUpdates.length, known?.redundantUpdates ?? 0),
     };
 
-    const countGrew = entry.current.meanCount > entry.baseline.meanCount;
+    const countGrew = entry.current.meanCount - entry.baseline.meanCount > COUNT_DIFF_THRESHOLD;
     const initialGrew = current.initialUpdateCount > floor.initialUpdateCount;
     const redundantGrew = current.redundantUpdates.length > floor.redundantUpdates;
 
@@ -125,4 +133,4 @@ function buildPerfDiff(output: CompareResult, overrides: Partial<DiffOptions> = 
 }
 
 export default buildPerfDiff;
-export {DEFAULT_OPTIONS};
+export {COUNT_DIFF_THRESHOLD, DEFAULT_OPTIONS};

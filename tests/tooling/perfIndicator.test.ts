@@ -111,6 +111,14 @@ describe('perf-indicator diff', () => {
         expect(diff.renderRows.at(0)?.meanCount).toEqual({baseline: 2, current: 3});
     });
 
+    test('ignores a sub-threshold meanCount move, which is run-to-run jitter', () => {
+        // Replayed from a real branch: 3 -> 3.2 with unchanged issue counts means the scenario rendered once more in
+        // 2 of 10 runs. Upstream guards this with COUNT_DIFF_THRESHOLD = 0.5 and so must the comment.
+        const diff = buildPerfDiff(buildOutput({meaningless: [buildCompared(buildEntry({name: 'jitter', meanCount: 3}), buildEntry({name: 'jitter', meanCount: 3.2}))]}));
+
+        expect(diff.renderRows).toEqual([]);
+    });
+
     test('reports an added scenario with a violation using absolute values', () => {
         const added: AddedEntry = {name: 'brand new', type: 'render', current: buildEntry({name: 'brand new', issues: issues(2, [1])})};
         const diff = buildPerfDiff(buildOutput({added: [added]}));
