@@ -1,3 +1,4 @@
+// Throwaway edit for the perf-indicator demo. Comment only, so the render behaviour is unchanged.
 import useInboxTabSpanLifecycle from '@hooks/useInboxTabSpanLifecycle';
 import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
