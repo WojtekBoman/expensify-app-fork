@@ -27,7 +27,7 @@ jobs:
     # A run that failed still has something to say: the gate fires on a render-count increase, and that is exactly the
     # PR whose author most needs the detail.
     if: ${{ github.event.workflow_run.event == 'pull_request' && contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion) }}
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: useblacksmith/checkout@1c9394c220d293645707b625ba9d79685f093a8f # v1
