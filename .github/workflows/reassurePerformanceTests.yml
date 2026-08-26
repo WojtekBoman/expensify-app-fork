@@ -91,6 +91,23 @@ jobs:
       - name: Compare performance results
         run: node -e "require('@callstack/reassure-compare').compare().catch((error) => { console.error(error); process.exit(1); })"
 
+      # Uploaded before the validator runs, so the comment follower still gets its input on a run where the gate fires.
+      # The follower rebuilds the comment from this file with its own trusted copy of the script, so nothing a fork PR
+      # can change decides what gets posted.
+      - name: Record the PR number for the comment follower
+        shell: bash
+        run: echo '${{ github.event.pull_request.number }}' > ./.reassure/pr-number.txt
+
+      - name: Upload comparison output
+        # v6
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: reassure-comparison-output
+          path: |
+            ./.reassure/output.json
+            ./.reassure/pr-number.txt
+          include-hidden-files: true
+
       - name: Validate output.json
         id: validateReassureOutput
         uses: ./.github/actions/javascript/validateReassureOutput

@@ -6,8 +6,11 @@
  * Duration rows are off unless `--with-duration` is passed. Baseline and branch are measured on two independently
  * provisioned runners, so a per-PR duration number reports the runner as much as the diff.
  *
- * Writes the body to `--out` (default `.reassure/perf-comment.md`) and prints it. Nothing here touches the GitHub API:
- * the posting job consumes the file as an artifact.
+ * Writes the body to `--out` (default `.reassure/perf-comment.md`), a `signal` / `clean` verdict to `<out>.status`,
+ * and prints the body. Nothing here touches the GitHub API: the posting job reads both files.
+ *
+ * The verdict file exists because `postOrReplaceComment` always posts. A clean run has to stay silent unless a
+ * previous push already commented, and only the caller knows that.
  */
 import type {CompareResult} from '@callstack/reassure-compare';
 
@@ -47,7 +50,10 @@ function main() {
     const diff = buildPerfDiff(output, {includeDuration, durationFloorMs, durationRelativeThreshold, knownIssues});
     const body = renderPerfComment(diff, {includeDuration, durationFloorMs, durationRelativeThreshold});
 
+    const verdict = diff.renderRows.length > 0 || diff.durationRows.length > 0 ? 'signal' : 'clean';
+
     fs.writeFileSync(outPath, body);
+    fs.writeFileSync(`${outPath}.status`, verdict);
     console.log(body);
 }
 

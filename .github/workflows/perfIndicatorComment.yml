@@ -1,0 +1,120 @@
+name: Performance indicator comment
+
+# Follows Reassure rather than running inside it. `pull_request` gives a read-only token on a fork PR, so a comment
+# step there fails, and App takes many fork contributions: 23 runs in the last month were fork PRs awaiting approval.
+# A `workflow_run` follower gets a write token without ever running the pull request's code, the same pattern
+# failureNotifier.yml already uses.
+#
+# The follower renders the comment body itself, from the `output.json` the Reassure run uploaded, using its own
+# checkout of this repository. Rendering it inside the Reassure run would let a fork PR choose the text posted under
+# the bot's name.
+on:
+  workflow_run:
+    workflows: ['Reassure Performance Tests']
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  comment:
+    name: Post or update the perf-indicator comment
+    # A run that failed still has something to say: the gate fires on a render-count increase, and that is exactly the
+    # PR whose author most needs the detail.
+    if: ${{ github.event.workflow_run.event == 'pull_request' && contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion) }}
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        uses: useblacksmith/checkout@1c9394c220d293645707b625ba9d79685f093a8f # v1
+
+      - name: Download comparison output
+        continue-on-error: true
+        # v7
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131
+        with:
+          name: reassure-comparison-output
+          path: ./.reassure
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      # A Reassure run that died before the upload has nothing to say. That is an infra failure, not a perf signal,
+      # and reporting it is not this workflow's job.
+      - name: Skip when the run produced no comparison
+        id: guard
+        shell: bash
+        run: |
+          if [[ ! -f ./.reassure/output.json || ! -f ./.reassure/pr-number.txt ]]; then
+            echo 'No comparison output on this run; nothing to comment.'
+            echo 'proceed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PR_NUMBER="$(tr -cd '0-9' < ./.reassure/pr-number.txt)"
+          if [[ -z "$PR_NUMBER" ]]; then
+            echo 'No PR number recorded; nothing to comment on.'
+            echo 'proceed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo 'proceed=true' >> "$GITHUB_OUTPUT"
+          echo "prNumber=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Build the comment body
+        id: build
+        if: ${{ steps.guard.outputs.proceed == 'true' }}
+        shell: bash
+        run: |
+          set -e
+          # `--config=/dev/null` skips the repository's `bunfig.toml`, whose `preload` scans `node_modules` for
+          # react-native packages to stub. This job installs no dependencies, and the renderer needs none: it reads
+          # two files and writes two files. Without the flag the preload fails with ENOENT before the script runs.
+          #
+          # The blacksmith images ship bun, which is how bunTests.yml runs `npm run test:bun` with no install step.
+          # Any other runner falls back to the version this repository already pins in `.bun-version`.
+          if command -v bun > /dev/null; then
+            bun --config=/dev/null scripts/perfIndicator/cli.ts --output ./.reassure/output.json --out ./.reassure/perf-comment.md > /dev/null
+          else
+            npx --yes "bun@$(cat .bun-version)" --config=/dev/null scripts/perfIndicator/cli.ts --output ./.reassure/output.json --out ./.reassure/perf-comment.md > /dev/null
+          fi
+          echo "verdict=$(cat ./.reassure/perf-comment.md.status)" >> "$GITHUB_OUTPUT"
+
+      - name: Post or update the sticky comment
+        if: ${{ steps.guard.outputs.proceed == 'true' }}
+        # v7
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
+        env:
+          PR_NUMBER: ${{ steps.guard.outputs.prNumber }}
+          VERDICT: ${{ steps.build.outputs.verdict }}
+        with:
+          script: |
+            const fs = require('fs');
+            const MARKER = '<!-- perf-indicator -->';
+            const {owner, repo} = context.repo;
+            const issueNumber = Number(process.env.PR_NUMBER);
+
+            const comments = await github.paginate(github.rest.issues.listComments, {owner, repo, issue_number: issueNumber});
+            const existing = comments.find((comment) => comment.body?.startsWith(MARKER));
+
+            // A clean run stays silent unless an earlier push left a comment that would otherwise read as current.
+            // That is what keeps this quiet on ordinary work: replayed over 25 recent branches, none would comment.
+            if (process.env.VERDICT !== 'signal' && !existing) {
+              console.log('Nothing to report and no earlier comment to clear.');
+              return;
+            }
+
+            const body =
+              process.env.VERDICT === 'signal'
+                ? fs.readFileSync('./.reassure/perf-comment.md', 'utf8')
+                : `${MARKER}\n\nNo render-count or render-issue change on this push. The signal reported on the previous push is gone.\n`;
+
+            // Editing in place keeps one comment on the pull request rather than a trail of hidden ones.
+            if (existing) {
+              await github.rest.issues.updateComment({owner, repo, comment_id: existing.id, body});
+              console.log(`Updated comment ${existing.id} on #${issueNumber}.`);
+              return;
+            }
+            await github.rest.issues.createComment({owner, repo, issue_number: issueNumber, body});
+            console.log(`Created a comment on #${issueNumber}.`);

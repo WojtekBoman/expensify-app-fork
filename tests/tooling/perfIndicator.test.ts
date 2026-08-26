@@ -218,6 +218,47 @@ describe('perf-indicator rendering', () => {
     });
 });
 
+describe('perf-indicator cli contract', () => {
+    /**
+     * The comment workflow branches on `<out>.status` rather than on the body text, so that file is a contract between
+     * the CLI and the follower workflow. A rename or a dropped write would silently stop every comment.
+     */
+    function runCli(output: CompareResult): {body: string; status: string} {
+        const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'perf-indicator-cli-'));
+        const outputFile = path.join(directory, 'output.json');
+        const outFile = path.join(directory, 'perf-comment.md');
+        fs.writeFileSync(outputFile, JSON.stringify(output));
+
+        const result = Bun.spawnSync(['bun', path.join(import.meta.dir, '../../scripts/perfIndicator/cli.ts'), '--output', outputFile, '--out', outFile]);
+        if (result.exitCode !== 0) {
+            throw new Error(`cli exited ${result.exitCode}: ${result.stderr.toString()}`);
+        }
+
+        const body = fs.readFileSync(outFile, 'utf8');
+        const status = fs.readFileSync(`${outFile}.status`, 'utf8');
+        fs.rmSync(directory, {recursive: true, force: true});
+        return {body, status};
+    }
+
+    test('writes a clean verdict when nothing moved', () => {
+        expect(runCli(buildOutput()).status).toBe('clean');
+    });
+
+    test('writes a signal verdict when a render issue is new', () => {
+        const entry = buildCompared(buildEntry({name: 'a'}), buildEntry({name: 'a', issues: issues(0, [2])}));
+        const {status, body} = runCli(buildOutput({meaningless: [entry]}));
+
+        expect(status).toBe('signal');
+        expect(body).toContain('### Render counts');
+    });
+
+    test('writes a clean verdict for a large duration move, since duration is off by default', () => {
+        const entry = buildCompared(buildEntry({name: 'slow', type: 'function', meanDuration: 50}), buildEntry({name: 'slow', type: 'function', meanDuration: 2000}));
+
+        expect(runCli(buildOutput({significant: [entry]})).status).toBe('clean');
+    });
+});
+
 describe('perf-indicator over a real compare() run', () => {
     /**
      * `output.json` has no `compared` array, so the diff reconstructs it as `significant + meaningless`. That
