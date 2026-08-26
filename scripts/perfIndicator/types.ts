@@ -50,6 +50,9 @@ type PerfDiff = {
     removedScenarios: string[];
     /** Counts for the collapsed section, so a clean comment can still say what was measured. */
     stats: {
+        /** Mirrors `DiffOptions.includeDuration`, so the renderer can say why a duration row is absent. */
+        durationReported: boolean;
+
         comparedCount: number;
         renderComparedCount: number;
         durationEligibleCount: number;
@@ -58,6 +61,13 @@ type PerfDiff = {
 };
 
 type DiffOptions = {
+    /**
+     * Whether duration rows may appear at all. Off by default: baseline and branch are measured on two independently
+     * provisioned runners with no shared timing reference, so a per-PR duration number reports the runner as much as
+     * the diff. Turning this on is a claim that the measurement has been repaired.
+     */
+    includeDuration: boolean;
+
     /** Only scenarios whose baseline mean is at or above this (ms) can produce a duration row. */
     durationFloorMs: number;
 

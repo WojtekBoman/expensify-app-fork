@@ -56,14 +56,14 @@ function renderDurationSection(rows: DurationRow[], floorMs: number, threshold: 
     ].join('\n');
 }
 
-function renderPerfComment(diff: PerfDiff, options: {durationFloorMs: number; durationRelativeThreshold: number}): string {
+function renderPerfComment(diff: PerfDiff, options: {includeDuration: boolean; durationFloorMs: number; durationRelativeThreshold: number}): string {
     const sections: string[] = [MARKER, '## Performance'];
 
     const hasRenderRows = diff.renderRows.length > 0;
     const hasDurationRows = diff.durationRows.length > 0;
 
     if (!hasRenderRows && !hasDurationRows) {
-        sections.push('No render or duration change.');
+        sections.push(options.includeDuration ? 'No render or duration change.' : 'No render-count or render-issue change.');
     } else {
         const parts = [hasRenderRows ? `${diff.renderRows.length} render` : '', hasDurationRows ? `${diff.durationRows.length} duration` : ''].filter(Boolean);
         sections.push(`${parts.join(' and ')} row(s) below.`);
@@ -81,7 +81,10 @@ function renderPerfComment(diff: PerfDiff, options: {durationFloorMs: number; du
         '<summary>Measurement details</summary>',
         '',
         `- compared scenarios: ${diff.stats.comparedCount} (${diff.stats.renderComparedCount} render)`,
-        `- eligible for a duration row: ${diff.stats.durationEligibleCount}`,
+        diff.stats.durationReported
+            ? `- eligible for a duration row: ${diff.stats.durationEligibleCount}`
+            : `- duration: not reported. Baseline and branch are measured on two different runners, so a per-PR duration number is not trustworthy ` +
+              `(${diff.stats.durationEligibleCount} scenarios would have been eligible)`,
         `- known render issues muted: ${diff.stats.knownIssuesMuted}`,
         `- added scenarios: ${diff.addedScenarios.length}`,
         `- removed scenarios: ${diff.removedScenarios.length}`,

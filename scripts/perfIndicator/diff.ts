@@ -21,6 +21,7 @@ import type {DiffOptions, DurationRow, PerfDiff, RenderRow} from './types';
 const COUNT_DIFF_THRESHOLD = 0.5;
 
 const DEFAULT_OPTIONS: DiffOptions = {
+    includeDuration: false,
     durationFloorMs: 5,
     durationRelativeThreshold: 0.2,
     knownIssues: {},
@@ -105,10 +106,12 @@ function buildPerfDiff(output: CompareResult, overrides: Partial<DiffOptions> = 
     const renderCandidates = [...compared, ...added].filter((entry) => entry.type === 'render');
     const renderRows = renderCandidates.map((entry) => buildRenderRow(entry, options)).filter((row): row is RenderRow => row !== undefined);
 
-    const durationRows = compared
-        .map((entry) => buildDurationRow(entry, options))
-        .filter((row): row is DurationRow => row !== undefined)
-        .sort((a, b) => b.relativeDurationDiff - a.relativeDurationDiff);
+    const durationRows = options.includeDuration
+        ? compared
+              .map((entry) => buildDurationRow(entry, options))
+              .filter((row): row is DurationRow => row !== undefined)
+              .sort((a, b) => b.relativeDurationDiff - a.relativeDurationDiff)
+        : [];
 
     // A muted scenario is one that violates today but produced no row.
     const reportedNames = new Set(renderRows.map((row) => row.name));
@@ -124,6 +127,7 @@ function buildPerfDiff(output: CompareResult, overrides: Partial<DiffOptions> = 
         addedScenarios: added.map((entry) => entry.name).sort(),
         removedScenarios: removed.map((entry) => entry.name).sort(),
         stats: {
+            durationReported: options.includeDuration,
             comparedCount: compared.length,
             renderComparedCount: compared.filter((entry) => entry.type === 'render').length,
             durationEligibleCount: compared.filter((entry) => entry.baseline.meanDuration >= options.durationFloorMs).length,

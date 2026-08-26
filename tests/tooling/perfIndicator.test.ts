@@ -12,7 +12,9 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-const RENDER_OPTIONS = {durationFloorMs: 5, durationRelativeThreshold: 0.2};
+const RENDER_OPTIONS = {includeDuration: false, durationFloorMs: 5, durationRelativeThreshold: 0.2};
+const RENDER_OPTIONS_WITH_DURATION = {...RENDER_OPTIONS, includeDuration: true};
+const WITH_DURATION = {includeDuration: true} as const;
 
 function buildEntry(overrides: Partial<MeasureEntry> & {name: string}): MeasureEntry {
     return {
@@ -147,7 +149,7 @@ describe('perf-indicator diff', () => {
 describe('perf-indicator duration section', () => {
     test('reports a scenario above the floor that moved past the threshold', () => {
         const entry = buildCompared(buildEntry({name: 'slow', type: 'function', meanDuration: 50}), buildEntry({name: 'slow', type: 'function', meanDuration: 70}));
-        const diff = buildPerfDiff(buildOutput({significant: [entry]}));
+        const diff = buildPerfDiff(buildOutput({significant: [entry]}), WITH_DURATION);
 
         expect(diff.durationRows).toHaveLength(1);
         expect(diff.durationRows.at(0)?.relativeDurationDiff).toBeCloseTo(0.4);
@@ -155,7 +157,7 @@ describe('perf-indicator duration section', () => {
 
     test('drops a sub-floor scenario however large the relative change', () => {
         const entry = buildCompared(buildEntry({name: 'fast', type: 'function', meanDuration: 0.001}), buildEntry({name: 'fast', type: 'function', meanDuration: 0.1}));
-        const diff = buildPerfDiff(buildOutput({significant: [entry]}));
+        const diff = buildPerfDiff(buildOutput({significant: [entry]}), WITH_DURATION);
 
         expect(diff.durationRows).toEqual([]);
         expect(diff.stats.durationEligibleCount).toBe(0);
@@ -163,15 +165,26 @@ describe('perf-indicator duration section', () => {
 
     test('drops a scenario above the floor that stayed inside the threshold', () => {
         const entry = buildCompared(buildEntry({name: 'steady', type: 'function', meanDuration: 50}), buildEntry({name: 'steady', type: 'function', meanDuration: 55}));
-        const diff = buildPerfDiff(buildOutput({significant: [entry]}));
+        const diff = buildPerfDiff(buildOutput({significant: [entry]}), WITH_DURATION);
 
         expect(diff.durationRows).toEqual([]);
         expect(diff.stats.durationEligibleCount).toBe(1);
     });
 
+    test('produces no duration rows by default, however large the change', () => {
+        const entry = buildCompared(buildEntry({name: 'slow', type: 'function', meanDuration: 50}), buildEntry({name: 'slow', type: 'function', meanDuration: 2000}));
+        const diff = buildPerfDiff(buildOutput({significant: [entry]}));
+
+        // Baseline and branch are measured on two independently provisioned runners. Until that is repaired, a per-PR
+        // duration number reports the runner as much as the diff, so the default must stay off.
+        expect(diff.durationRows).toEqual([]);
+        expect(diff.stats.durationReported).toBe(false);
+        expect(diff.stats.durationEligibleCount).toBe(1);
+    });
+
     test('reports improvements too, so the comment is not one-sided', () => {
         const entry = buildCompared(buildEntry({name: 'faster', type: 'function', meanDuration: 50}), buildEntry({name: 'faster', type: 'function', meanDuration: 20}));
-        const diff = buildPerfDiff(buildOutput({significant: [entry]}));
+        const diff = buildPerfDiff(buildOutput({significant: [entry]}), WITH_DURATION);
 
         expect(diff.durationRows.at(0)?.relativeDurationDiff).toBeCloseTo(-0.6);
     });
@@ -179,12 +192,22 @@ describe('perf-indicator duration section', () => {
 
 describe('perf-indicator rendering', () => {
     test('renders one visible line on a clean comparison', () => {
-        const body = renderPerfComment(buildPerfDiff(buildOutput()), RENDER_OPTIONS);
+        const body = renderPerfComment(buildPerfDiff(buildOutput(), WITH_DURATION), RENDER_OPTIONS_WITH_DURATION);
 
         expect(body).toContain('<!-- perf-indicator -->');
         expect(body).toContain('No render or duration change.');
         expect(body).not.toContain('### Render counts');
         expect(body).not.toContain('### Duration');
+    });
+
+    test('says why duration is absent when it is not reported', () => {
+        const entry = buildCompared(buildEntry({name: 'slow', type: 'function', meanDuration: 50}), buildEntry({name: 'slow', type: 'function', meanDuration: 2000}));
+        const body = renderPerfComment(buildPerfDiff(buildOutput({significant: [entry]})), RENDER_OPTIONS);
+
+        expect(body).toContain('No render-count or render-issue change.');
+        expect(body).not.toContain('### Duration');
+        expect(body).toContain('duration: not reported');
+        expect(body).toContain('1 scenarios would have been eligible');
     });
 
     test('names the newly-added redundant update indices', () => {
@@ -219,7 +242,7 @@ describe('perf-indicator over a real compare() run', () => {
 
         await compare({baselineFile, currentFile, outputFile, outputFormat: 'json'});
         const output = parseJson<CompareResult>(fs.readFileSync(outputFile, 'utf8'));
-        const diff = buildPerfDiff(output, {knownIssues: {renderTwo: {redundantUpdates: 1, initialUpdateCount: 0}}});
+        const diff = buildPerfDiff(output, {includeDuration: true, knownIssues: {renderTwo: {redundantUpdates: 1, initialUpdateCount: 0}}});
 
         expect(diff.stats.comparedCount).toBe(3);
         expect(diff.renderRows.map((row) => row.name)).toEqual(['renderOne']);
