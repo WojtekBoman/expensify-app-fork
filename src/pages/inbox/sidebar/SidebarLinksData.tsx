@@ -1,4 +1,5 @@
 // Throwaway edit for the perf-indicator demo. Comment only, so the render behaviour is unchanged.
+// Push 2: still comment only. The follower should stay silent on this run.
 import useInboxTabSpanLifecycle from '@hooks/useInboxTabSpanLifecycle';
 import useLocalize from '@hooks/useLocalize';
 import useOnyx from '@hooks/useOnyx';
