@@ -47,9 +47,9 @@ describe('render', () => {
 
         const comment = render(head, {kind: 'merge-base', report: base}, 'main');
 
-        expect(comment).toContain('| newFeature (gzip) | 250,000 B | - | New file |');
+        expect(comment).toContain('| newFeature (gzip) | 250.00 kB | - | New file |');
         // Once in the headline table and once in the collapsed block: an added chunk is not a detail.
-        expect(comment.split('| newFeature (gzip) | 250,000 B | - | New file |')).toHaveLength(3);
+        expect(comment.split('| newFeature (gzip) | 250.00 kB | - | New file |')).toHaveLength(3);
     });
 
     it('reports a chunk the pull request deleted, which head alone cannot see', () => {
@@ -58,8 +58,8 @@ describe('render', () => {
 
         const comment = render(head, {kind: 'merge-base', report: base}, 'main');
 
-        expect(comment).toContain('| illustrations (gzip) | - | 793,177 B | Deleted |');
-        expect(comment).not.toContain('| illustrations (gzip) | 793,177 B | 793,177 B | no change |');
+        expect(comment).toContain('| illustrations (gzip) | - | 793.18 kB | Deleted |');
+        expect(comment).not.toContain('| illustrations (gzip) | 793.18 kB | 793.18 kB | no change |');
     });
 
     it('never renders an absent side as a size of zero', () => {
@@ -68,7 +68,7 @@ describe('render', () => {
 
         const comment = render(head, {kind: 'merge-base', report: base}, 'main');
 
-        expect(comment).not.toContain('| newFeature (gzip) | 250,000 B | 0 B |');
+        expect(comment).not.toContain('| newFeature (gzip) | 250.00 kB | 0 B |');
     });
 
     it('keeps a below-floor chunk out of the headline and in the collapsed block', () => {
@@ -78,7 +78,7 @@ describe('render', () => {
         const [headline, collapsed] = render(head, {kind: 'merge-base', report: base}, 'main').split('<details>');
 
         expect(headline).not.toContain('main (gzip)');
-        expect(collapsed).toContain('| main (gzip) | 1,476,117 B | 1,476,017 B |');
+        expect(collapsed).toContain('| main (gzip) | 1.48 MB | 1.48 MB | +100 B');
     });
 
     it('promotes a chunk that moved past the floor', () => {
@@ -87,7 +87,7 @@ describe('render', () => {
 
         const [headline] = render(head, {kind: 'merge-base', report: base}, 'main').split('<details>');
 
-        expect(headline).toContain('| main (gzip) | 1,500,000 B | 1,476,017 B | +23,983 B (+1.62%) |');
+        expect(headline).toContain('| main (gzip) | 1.50 MB | 1.48 MB | +23.98 kB (+1.62%) |');
     });
 
     it('renders one-value rows with no baseline, so nothing reads as a delta of zero', () => {
@@ -95,6 +95,33 @@ describe('render', () => {
 
         expect(comment).toContain('No `main` measurement resolved');
         expect(comment).not.toContain('no change');
+    });
+});
+
+describe('size formatting', () => {
+    function changeFor(headGzip: number, baseGzip: number): string {
+        const base = report();
+        const head = report({sha: HEAD_SHA, chunks: {...base.chunks, main: chunk(1, headGzip, true)}});
+        const line = render(head, {kind: 'merge-base', report: {...base, chunks: {...base.chunks, main: chunk(1, baseGzip, true)}}}, 'main')
+            .split('\n')
+            .find((row) => row.startsWith('| main (gzip)'));
+        return line ?? '';
+    }
+
+    it('keeps a sub-kilobyte change in bytes, which is the range the noise floor lives in', () => {
+        expect(changeFor(1_000_016, 1_000_000)).toContain('| +16 B ');
+    });
+
+    it('scales a kilobyte-sized change to kB', () => {
+        expect(changeFor(1_320_939, 1_000_000)).toContain('| +320.94 kB ');
+    });
+
+    it('scales a megabyte-sized value to MB', () => {
+        expect(changeFor(15_334_646, 1_000)).toContain('| 15.33 MB |');
+    });
+
+    it('scales a negative change too', () => {
+        expect(changeFor(1_000_000, 1_320_939)).toContain('| -320.94 kB ');
     });
 });
 

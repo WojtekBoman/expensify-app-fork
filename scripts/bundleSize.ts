@@ -353,7 +353,33 @@ function readReport(filePath: string): BundleSizeReport {
     return parseReport(parsed, filePath);
 }
 
+/**
+ * Sizes as a reader thinks about them, scaled to the unit that suits the number.
+ *
+ * Anything under a kilobyte keeps its exact byte count, because that is the range the noise floor lives in:
+ * the one gzip wobble ever measured is 1 B, and a row reading `+16 B` says something a row reading `+0.02 kB`
+ * does not. Above that, two decimals are finer than any difference worth arguing about - 10 B on a megabyte
+ * chunk - and the percentage carries the shape of the change anyway.
+ *
+ * Decimal units, so `kB` means 1,000 bytes. That is what it means, and it is what the network tooling a
+ * reader would compare this against reports.
+ */
+const BYTES_IN_KB = 1000;
+const BYTES_IN_MB = BYTES_IN_KB * 1000;
+
 function bytes(value: number): string {
+    const magnitude = Math.abs(value);
+    if (magnitude < BYTES_IN_KB) {
+        return `${value.toLocaleString('en-US')} B`;
+    }
+    if (magnitude < BYTES_IN_MB) {
+        return `${(value / BYTES_IN_KB).toFixed(2)} kB`;
+    }
+    return `${(value / BYTES_IN_MB).toFixed(2)} MB`;
+}
+
+/** The floor is a stated threshold, so it is quoted exactly rather than scaled to `1.02 kB`. */
+function exactBytes(value: number): string {
     return `${value.toLocaleString('en-US')} B`;
 }
 
@@ -483,7 +509,7 @@ function render(head: BundleSizeReport, baseline: Baseline, branch: string): str
         ...detailColumns,
         ...detail,
         '',
-        `Measured with \`npm run build\`, gzip level ${GZIP_LEVEL} under ${head.measuredWith ?? 'an unrecorded runtime'}, with the per-build identifiers held constant so gzip is reproducible. Per-chunk rows below ${bytes(CHUNK_HEADLINE_FLOOR_BYTES)} stay in this block.`,
+        `Measured with \`npm run build\`, gzip level ${GZIP_LEVEL} under ${head.measuredWith ?? 'an unrecorded runtime'}, with the per-build identifiers held constant so gzip is reproducible. Per-chunk rows below ${exactBytes(CHUNK_HEADLINE_FLOOR_BYTES)} stay in this block.`,
         '',
         '</details>',
     ].join('\n');
@@ -547,7 +573,7 @@ function assertSame(aPath: string, bPath: string): void {
 
     if (withinFloor.length > 0) {
         process.stdout.write(
-            `gzip floor, ${withinFloor.length} key(s) below the ${bytes(CHUNK_HEADLINE_FLOOR_BYTES)} reporting threshold:\n${withinFloor.map((line) => `  ${line}`).join('\n')}\n`,
+            `gzip floor, ${withinFloor.length} key(s) below the ${exactBytes(CHUNK_HEADLINE_FLOOR_BYTES)} reporting threshold:\n${withinFloor.map((line) => `  ${line}`).join('\n')}\n`,
         );
     }
     if (failures.length === 0) {
