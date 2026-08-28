@@ -9,6 +9,7 @@ import {PickerStateProvider} from 'react-native-picker-select';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 import '../wdyr';
+import './libs/pocBallast';
 import {ActionSheetAwareScrollViewProvider} from './components/ActionSheetAwareScrollView';
 import ActiveElementRoleProvider from './components/ActiveElementRoleProvider';
 import {AvatarTooltipsProvider} from './components/Avatar/tooltips/AvatarTooltipContext';
