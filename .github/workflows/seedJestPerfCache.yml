@@ -7,7 +7,8 @@ name: Seed Jest perf cache
 
 on:
   push:
-    branches: [main]
+    # PoC-only: `personal` cannot dispatch this workflow (it is not on the fork's default branch).
+    branches: [main, poc/reassure-sharding-base]
   workflow_dispatch:
 
 concurrency:
@@ -18,10 +19,10 @@ jobs:
   seedJestPerfCache:
     name: Seed the Jest transform cache and main's baseline
     # Must match the perf measure jobs' class: transform output interchangeable, durations comparable.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04 # PoC-only: no Blacksmith runners on personal
     steps:
       - name: Checkout
-        uses: useblacksmith/checkout@0647fdbab2614a5eb86d2971070e325060d91056 # v1.7.0
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2, PoC-only
 
       # Writes normalized-package-lock.json, which the transform cache key hashes.
       - name: Setup NodeJS
