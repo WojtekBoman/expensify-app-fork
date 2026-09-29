@@ -15,8 +15,8 @@ const SEED_WORKFLOW = '.github/workflows/seedJestPerfCache.yml';
 
 type Step = {uses?: string; with?: Record<string, unknown>};
 // eslint-disable-next-line @typescript-eslint/naming-convention -- `runs-on` is the YAML key GitHub Actions defines, not a name this repo chooses
-type Job = {'runs-on'?: string; steps?: Step[]};
-type Workflow = {jobs: Record<string, Job>};
+type Job = {'runs-on'?: string; strategy?: {matrix?: {shard?: string[]}}; steps?: Step[]};
+type Workflow = {env?: Record<string, string>; jobs: Record<string, Job>};
 
 function readWorkflow(path: string): Workflow {
     // Bun.YAML rather than js-yaml: js-yaml is only a hoisted transitive at v3 while the repo declares
@@ -61,6 +61,16 @@ describe('Reassure perf caches', () => {
         // Catches a key with no commit expression at all: three identical constants satisfy the
         // assertion above while pinning every PR to one stale baseline.
         expect([...shapes].at(0)).toContain('<commit>');
+    });
+
+    it('splits the suite into the same shards in every measure job', () => {
+        // A baseline slice measured under a different split than the branch slice compares different
+        // scenario sets; the gap shows up as Added/Removed scenarios, which do not gate.
+        const shardEnv = (workflow: Workflow) => Object.fromEntries(Object.entries(workflow.env ?? {}).filter(([name]) => name.startsWith('REASSURE_SHARD_')));
+        expect(Object.keys(shardEnv(perfWorkflow)).length).toBeGreaterThan(0);
+        expect(shardEnv(seedWorkflow)).toEqual(shardEnv(perfWorkflow));
+        const matrices = new Set([...Object.values(seedWorkflow.jobs), ...Object.values(perfWorkflow.jobs)].flatMap((job) => (job.strategy?.matrix?.shard ? [JSON.stringify(job.strategy.matrix.shard)] : [])));
+        expect([...matrices]).toHaveLength(1);
     });
 
     it('measures on the runner class the perf jobs are judged on', () => {
