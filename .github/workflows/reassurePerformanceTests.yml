@@ -23,7 +23,8 @@ concurrency:
 #   ProjectConfig, which is hashed into every transform-cache key and would rotate the seed's entry.
 env:
   REASSURE_SHARD_SELECTION_LIST: '/SelectionList\.perf-test\.tsx$'
-  REASSURE_SHARD_REST: '^(?!.*/SelectionList\.perf-test\.tsx$)'
+  # PoC negative check, reverted next commit: both shards measure SelectionList, so the merge must fail.
+  REASSURE_SHARD_REST: '/SelectionList\.perf-test\.tsx$'
 
 jobs:
   baseline-perf-tests:
