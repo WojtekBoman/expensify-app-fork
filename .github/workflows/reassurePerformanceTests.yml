@@ -248,9 +248,10 @@ jobs:
           merge() {
             # First header line kept, every other header dropped, all scenario lines kept.
             cat shards/"$1"/*/"$2" | awk 'NR==1 || !/^\{"metadata"/' > ".reassure/$2"
-            DUPLICATES=$(jq -r '.name // empty' ".reassure/$2" | sort | uniq -d)
+            # One line: an annotation ends at the first newline.
+            DUPLICATES=$(jq -r '.name // empty' ".reassure/$2" | sort | uniq -d | paste -sd ';' -)
             if [[ -n "$DUPLICATES" ]]; then
-              echo "::error::Scenarios measured in more than one $1 shard: $DUPLICATES"
+              echo "::error::$(tr ';' '\n' <<< "$DUPLICATES" | wc -l | tr -d ' ') scenarios measured in more than one $1 shard: ${DUPLICATES//;/, }"
               exit 1
             fi
             echo "::notice::Merged $1: $(ls -d shards/"$1"/*/ | wc -l) shards, $(grep -c '"meanDuration"' ".reassure/$2") scenarios"
